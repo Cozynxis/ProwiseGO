@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#1769a4">
-  <meta name="description" content="GO-style docentportaal demo voor GitHub Pages">
-  <title>GO Docentportaal</title>
+  <meta name="description" content="GO-style docent- en leerlingportaal demo voor GitHub Pages">
+  <title>GO Schoolportaal</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,23 +14,23 @@
       <div class="sidebar-top">
         <button class="brand" type="button" data-action="home" aria-label="Naar start">
           <span class="brand-logo">GO</span>
-          <span class="brand-text"><b>GO</b><small>Docentomgeving</small></span>
+          <span class="brand-text"><b>GO</b><small id="modeLabel">Docentomgeving</small></span>
         </button>
 
-        <button class="location-switcher" id="locationSwitcher" type="button">
+        <button class="location-switcher teacher-only" id="locationSwitcher" type="button">
           <span class="location-icon" data-icon="school"></span>
           <span class="location-copy"><small>Locatie</small><b id="locationLabel">De Horizon</b></span>
           <span class="chevron" data-icon="chevron-down"></span>
         </button>
 
         <button class="profile" id="profileButton" type="button">
-          <span class="avatar avatar-lg">LD</span>
-          <span class="profile-copy"><b>Levi Docent</b><small>Leerkracht</small></span>
+          <span class="avatar avatar-lg" id="sidebarAvatar">LD</span>
+          <span class="profile-copy"><b id="profileName">Levi Docent</b><small id="profileRole">Leerkracht</small></span>
           <span class="chevron" data-icon="chevron-down"></span>
         </button>
       </div>
 
-      <div class="group-block">
+      <div class="group-block teacher-only">
         <span class="group-caption">Actieve groep</span>
         <button class="group-switcher" id="groupSwitcher" type="button">
           <span class="group-avatar">8A</span>
@@ -39,70 +39,65 @@
         </button>
       </div>
 
-      <nav class="nav" aria-label="Hoofdnavigatie">
-        <button class="nav-item active" data-route="my-apps" type="button"><span data-icon="grid"></span><span class="nav-label">Mijn applicaties</span></button>
+      <nav class="nav teacher-nav" aria-label="Docentnavigatie">
+        <button class="nav-item active" data-route="day-start" type="button"><span data-icon="home"></span><span class="nav-label">Dagstart</span></button>
+        <button class="nav-item" data-route="my-apps" type="button"><span data-icon="grid"></span><span class="nav-label">Mijn applicaties</span></button>
         <button class="nav-item" data-route="group-apps" type="button"><span data-icon="users"></span><span class="nav-label">Groepsapplicaties</span></button>
         <button class="nav-item" data-route="tasks" type="button"><span data-icon="check-square"></span><span class="nav-label">Taken</span><span class="nav-badge" id="taskCount">3</span></button>
-        <button class="nav-item" data-route="classroom" type="button"><span data-icon="monitor"></span><span class="nav-label">Klassenmanagement</span><span class="online-dot" title="Klassenmanagement actief"></span></button>
+        <button class="nav-item" data-route="lesson-planner" type="button"><span data-icon="calendar"></span><span class="nav-label">Lesplanner</span></button>
+        <button class="nav-item" data-route="classroom" type="button"><span data-icon="monitor"></span><span class="nav-label">Klassenmanagement</span><span class="online-dot"></span></button>
+        <button class="nav-item" data-route="groups" type="button"><span data-icon="users"></span><span class="nav-label">Groepen</span></button>
+        <button class="nav-item" data-route="student-overview" type="button"><span data-icon="user"></span><span class="nav-label">Leerlingoverzicht</span></button>
+        <button class="nav-item" data-route="class-tools" type="button"><span data-icon="settings"></span><span class="nav-label">Klastools</span></button>
         <button class="nav-item" data-route="library" type="button"><span data-icon="library"></span><span class="nav-label">Bibliotheek</span></button>
+      </nav>
+
+      <nav class="nav student-nav" aria-label="Leerlingnavigatie">
+        <button class="nav-item active" data-student-route="student-home" type="button"><span data-icon="home"></span><span class="nav-label">Start</span></button>
+        <button class="nav-item" data-student-route="student-apps" type="button"><span data-icon="grid"></span><span class="nav-label">Mijn apps</span></button>
+        <button class="nav-item" data-student-route="student-tasks" type="button"><span data-icon="check-square"></span><span class="nav-label">Mijn taken</span></button>
+        <button class="nav-item" data-student-route="student-day" type="button"><span data-icon="calendar"></span><span class="nav-label">Vandaag</span></button>
+        <button class="nav-item" data-student-route="student-messages" type="button"><span data-icon="bell"></span><span class="nav-label">Berichten</span></button>
+        <button class="nav-item" data-student-route="student-help" type="button"><span data-icon="help-circle"></span><span class="nav-label">Hulp</span></button>
       </nav>
 
       <div class="sidebar-grow"></div>
 
-      <nav class="nav nav-secondary" aria-label="Extra navigatie">
+      <div class="teacher-only" style="padding:0 8px 10px">
+        <button class="btn light" data-action="random-student-view" style="width:100%;justify-content:center">👤 Bekijk als leerling</button>
+      </div>
+
+      <nav class="nav nav-secondary teacher-only" aria-label="Extra navigatie">
         <button class="nav-item" data-route="notifications" type="button"><span data-icon="bell"></span><span class="nav-label">Meldingen</span><span class="nav-badge soft" id="notificationCount">4</span></button>
         <button class="nav-item" data-route="settings" type="button"><span data-icon="settings"></span><span class="nav-label">Instellingen</span></button>
         <button class="nav-item" data-route="help" type="button"><span data-icon="help-circle"></span><span class="nav-label">Help & informatie</span></button>
       </nav>
-
+      <div class="student-nav" style="padding:0 8px 10px"><button class="btn light" data-action="return-teacher" style="width:100%;justify-content:center">← Terug naar docent</button></div>
       <button class="collapse-sidebar" id="collapseSidebar" type="button"><span data-icon="panel-left-close"></span><span class="nav-label">Navigatie inklappen</span></button>
     </aside>
 
     <div class="workspace">
+      <div class="student-sim-banner" id="studentSimBanner">Simulatiemodus: je bekijkt GO als <b id="studentSimName">leerling</b>. <button class="text-button" data-action="return-teacher">Terug naar docent</button></div>
       <header class="topbar">
         <div class="topbar-left">
           <button class="mobile-menu" id="mobileMenu" type="button" aria-label="Menu openen"><span data-icon="menu"></span></button>
-          <div class="breadcrumbs" id="breadcrumbs"><span>GO</span><span>/</span><b>Mijn applicaties</b></div>
+          <div class="breadcrumbs" id="breadcrumbs"><span>GO</span><span>/</span><b>Dagstart</b></div>
         </div>
         <div class="topbar-right">
-          <label class="global-search"><span data-icon="search"></span><input id="globalSearch" type="search" placeholder="Zoek in GO" autocomplete="off"><kbd>/</kbd></label>
-          <button class="top-icon" id="quickCreate" type="button" title="Nieuw"><span data-icon="plus"></span></button>
-          <button class="top-icon" id="notificationButton" type="button" title="Meldingen"><span data-icon="bell"></span><i class="notification-indicator"></i></button>
-          <button class="top-avatar" id="topProfile" type="button"><span class="avatar">LD</span></button>
+          <label class="global-search teacher-only"><span data-icon="search"></span><input id="globalSearch" type="search" placeholder="Zoek in GO" autocomplete="off"><kbd>/</kbd></label>
+          <button class="top-icon teacher-only" id="quickCreate" type="button" title="Nieuw"><span data-icon="plus"></span></button>
+          <button class="top-icon teacher-only" id="notificationButton" type="button" title="Meldingen"><span data-icon="bell"></span><i class="notification-indicator"></i></button>
+          <button class="top-avatar" id="topProfile" type="button"><span class="avatar" id="topAvatar">LD</span></button>
         </div>
       </header>
 
-      <main id="main" class="main" tabindex="-1">
-        <section class="page-loading" id="pageLoading" hidden>
-          <div class="skeleton title"></div><div class="skeleton line"></div><div class="skeleton-grid"><div></div><div></div><div></div><div></div></div>
-        </section>
-        <div id="page"></div>
-      </main>
+      <main id="main" class="main" tabindex="-1"><div id="page"></div></main>
     </div>
   </div>
 
-  <div class="drawer-layer" id="drawerLayer" aria-hidden="true">
-    <div class="drawer-scrim" data-close-drawer></div>
-    <aside class="drawer" id="drawer" role="dialog" aria-modal="true">
-      <header class="drawer-header"><div><span class="eyebrow" id="drawerEyebrow">GO</span><h2 id="drawerTitle">Paneel</h2></div><button class="icon-button" type="button" data-close-drawer><span data-icon="x"></span></button></header>
-      <div class="drawer-body" id="drawerBody"></div>
-    </aside>
-  </div>
-
-  <div class="modal-layer" id="modalLayer" aria-hidden="true">
-    <div class="modal-scrim" data-close-modal></div>
-    <section class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-      <header class="modal-header"><div><span class="eyebrow" id="modalEyebrow">GO</span><h2 id="modalTitle">Venster</h2></div><button class="icon-button" type="button" data-close-modal><span data-icon="x"></span></button></header>
-      <div class="modal-body" id="modalBody"></div>
-    </section>
-  </div>
-
-  <div class="context-menu" id="contextMenu" hidden></div>
-  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
-  <div class="command-palette" id="commandPalette" hidden>
-    <div class="command-box"><div class="command-input"><span data-icon="search"></span><input id="commandInput" placeholder="Ga naar of zoek..." autocomplete="off"><kbd>Esc</kbd></div><div id="commandResults" class="command-results"></div></div>
-  </div>
-
-  <script type="module" src="script.js"></script>
+  <div class="drawer-layer" id="drawerLayer" aria-hidden="true"><div class="drawer-scrim" data-close-drawer></div><aside class="drawer" id="drawer" role="dialog" aria-modal="true"><header class="drawer-header"><div><span class="eyebrow" id="drawerEyebrow">GO</span><h2 id="drawerTitle">Paneel</h2></div><button class="icon-button" type="button" data-close-drawer><span data-icon="x"></span></button></header><div class="drawer-body" id="drawerBody"></div></aside></div>
+  <div class="modal-layer" id="modalLayer" aria-hidden="true"><div class="modal-scrim" data-close-modal></div><section class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><header class="modal-header"><div><span class="eyebrow" id="modalEyebrow">GO</span><h2 id="modalTitle">Venster</h2></div><button class="icon-button" type="button" data-close-modal><span data-icon="x"></span></button></header><div class="modal-body" id="modalBody"></div></section></div>
+  <div class="context-menu" id="contextMenu" hidden></div><div class="toast-stack" id="toastStack" aria-live="polite"></div>
+  <script type="module" src="app-v3.js"></script>
 </body>
 </html>
