@@ -1,8 +1,20 @@
 import {groups,locations,initialApps,initialTasks,initialStudents,notifications} from './data.js';
-const KEY='go_teacher_portal_v2';
+const KEY='go_teacher_portal_v3';
 const clone=value=>JSON.parse(JSON.stringify(value));
-const defaults={route:'my-apps',groupId:'8A',locationId:'horizon',apps:clone(initialApps),tasks:clone(initialTasks),students:clone(initialStudents),folders:[],notifications:clone(notifications),settings:{compactTiles:false,showSubtitles:true,classLayout:'grid',animations:true},ui:{taskTab:'open',appSort:'custom',appQuery:'',taskQuery:'',libraryQuery:''}};
-function load(){try{const raw=localStorage.getItem(KEY);if(!raw)return clone(defaults);const saved=JSON.parse(raw);return {...clone(defaults),...saved,settings:{...defaults.settings,...saved.settings},ui:{...defaults.ui,...saved.ui}}}catch{return clone(defaults)}}
+const defaults={
+ route:'day-start',portalMode:'teacher',activeStudentId:null,teacherName:'Levi Docent',groupId:'8A',locationId:'horizon',
+ apps:clone(initialApps),tasks:clone(initialTasks),students:clone(initialStudents),folders:[],notifications:clone(notifications),flexGroups:[],
+ classMode:{active:false,traffic:'green',timerMinutes:15,timerRunning:false,scoreA:0,scoreB:0},
+ settings:{compactTiles:false,showSubtitles:true,classLayout:'grid',animations:true},
+ ui:{taskTab:'open',appSort:'custom',appQuery:'',taskQuery:'',libraryQuery:''}
+};
+function normalize(saved){
+ const merged={...clone(defaults),...saved,settings:{...defaults.settings,...saved?.settings},ui:{...defaults.ui,...saved?.ui},classMode:{...defaults.classMode,...saved?.classMode}};
+ if(!Array.isArray(merged.students)||!merged.students.length)merged.students=clone(initialStudents);
+ if(merged.portalMode==='student'&&!merged.activeStudentId)merged.activeStudentId=merged.students[0]?.id||null;
+ return merged;
+}
+function load(){try{const raw=localStorage.getItem(KEY);if(!raw)return clone(defaults);return normalize(JSON.parse(raw))}catch{return clone(defaults)}}
 let state=load();
 const listeners=new Set();
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(state))}catch{}};
@@ -12,13 +24,17 @@ export const store={
  get:()=>state,
  subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn)},
  set(patch){state={...state,...patch};commit()},
- update(fn){state=fn(clone(state));commit()},
+ update(fn){state=normalize(fn(clone(state)));commit()},
  route(route){state.route=route;commit()},
  reset(){state=clone(defaults);commit()},
  group(){return groups.find(g=>g.id===state.groupId)||groups[0]},
  location(){return locations.find(l=>l.id===state.locationId)||locations[0]},
- setGroup(id){const group=groups.find(g=>g.id===id);if(!group)return;state.groupId=id;state.students=clone(initialStudents).slice(0,group.count);state.tasks=state.tasks.map(t=>({...t,group:id,total:group.count,submitted:Math.min(t.submitted,group.count)}));commit()},
+ activeStudent(){return state.students.find(s=>s.id===state.activeStudentId)||state.students[0]||null},
+ setGroup(id){const group=groups.find(g=>g.id===id);if(!group)return;state.groupId=id;state.students=clone(initialStudents).slice(0,group.count);state.tasks=state.tasks.map(t=>({...t,group:id,total:group.count,submitted:Math.min(t.submitted,group.count)}));if(state.portalMode==='student')state.activeStudentId=state.students[0]?.id||null;commit()},
  setLocation(id){if(!locations.some(x=>x.id===id))return;state.locationId=id;commit()},
+ enterStudent(id){const student=state.students.find(s=>s.id===id)||state.students[0];if(!student)return;state.portalMode='student';state.activeStudentId=student.id;state.route='student-home';state.students=state.students.map(s=>({...s,selected:false}));commit()},
+ enterRandomStudent(){const pool=state.students.filter(s=>s.status!=='offline');const list=pool.length?pool:state.students;if(!list.length)return;const student=list[Math.floor(Math.random()*list.length)];state.portalMode='student';state.activeStudentId=student.id;state.route='student-home';state.students=state.students.map(s=>({...s,selected:false}));commit()},
+ exitStudent(){state.portalMode='teacher';state.activeStudentId=null;state.route='classroom';commit()},
  addApp(app){state.apps.push(app);commit()},
  patchApp(id,patch){state.apps=state.apps.map(a=>a.id===id?{...a,...patch}:a);commit()},
  removeApp(id){state.apps=state.apps.filter(a=>a.id!==id);commit()},
@@ -29,6 +45,7 @@ export const store={
  patchSelected(patch){state.students=state.students.map(s=>s.selected?{...s,...patch}:s);commit()},
  selectAll(value=true){state.students=state.students.map(s=>s.status==='offline'?s:{...s,selected:value});commit()},
  clearSelection(){state.students=state.students.map(s=>({...s,selected:false}));commit()},
+ classMode(patch){state.classMode={...state.classMode,...patch};commit()},
  setting(key,value){state.settings[key]=value;commit()},
  ui(key,value){state.ui[key]=value;commit()}
 };
