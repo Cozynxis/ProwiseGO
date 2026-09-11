@@ -1,218 +1,107 @@
-const $ = (q, root=document) => root.querySelector(q);
-const $$ = (q, root=document) => [...root.querySelectorAll(q)];
+import {store,makeId} from './modules/store.js';
+import {groups,locations,libraryApps} from './modules/data.js';
+import {hydrateIcons,icon} from './modules/icons.js';
+import {renderPage} from './modules/pages.js';
+import {$,$$,esc,toast,openModal,closeModal,openDrawer,closeDrawer,contextMenu,formatDate,initials} from './modules/ui.js';
 
-const state = {
-  view: 'apps',
-  taskFilter: 'open',
-  selectedStudents: new Set(),
-  group: localStorage.getItem('go-group') || '8A',
-  location: localStorage.getItem('go-location') || 'Basisschool De Horizon',
-  apps: JSON.parse(localStorage.getItem('go-apps') || 'null') || [
-    {id:'presenter',name:'Presenter',tag:'Presenteren',color:'#ef8a35',letters:'P'},
-    {id:'learn',name:'Prowise Learn',tag:'Oefenen',color:'#4aa873',letters:'L'},
-    {id:'drive',name:'Google Drive',tag:'Bestanden',color:'#488bcf',letters:'D'},
-    {id:'classroom',name:'Classroom',tag:'Leren',color:'#34a56f',letters:'C'},
-    {id:'office',name:'Microsoft 365',tag:'Productiviteit',color:'#e66a38',letters:'M'},
-    {id:'youtube',name:'YouTube',tag:'Video',color:'#df4a45',letters:'▶'},
-    {id:'wiki',name:'Wikipedia',tag:'Informatie',color:'#575f68',letters:'W'},
-    {id:'maps',name:'Maps',tag:'Aardrijkskunde',color:'#5d9e5a',letters:'M'}
-  ],
-  groupApps: JSON.parse(localStorage.getItem('go-group-apps') || 'null') || ['presenter','learn','classroom','drive'],
-  tasks: JSON.parse(localStorage.getItem('go-tasks') || 'null') || [
-    {id:1,title:'Rekenen – breuken oefenen',description:'Maak opdracht 1 t/m 12.',group:'Groep 8A',due:'2026-09-11',status:'open',done:12,total:24},
-    {id:2,title:'Taal – werkwoorden',description:'Rond de digitale les af.',group:'Groep 8A',due:'2026-09-12',status:'open',done:8,total:24},
-    {id:3,title:'Topografie Nederland',description:'Oefen provincies en hoofdsteden.',group:'Groep 8A',due:'2026-09-15',status:'future',done:0,total:24},
-    {id:4,title:'Leesopdracht hoofdstuk 3',description:'Lees en beantwoord de vragen.',group:'Groep 8A',due:'2026-09-09',status:'done',done:24,total:24}
-  ],
-  students: [
-    ['Daan Jansen','Google Docs – Werkstuk','online',86],['Sophie de Wit','Rekentuin – Breuken','online',72],['Milan Bakker','YouTube – instructievideo','online',54],['Noa Visser','Prowise Learn','online',91],['Sem Smit','Nieuw tabblad','idle',38],['Lotte Meijer','Google Classroom','online',64],['Finn de Boer','Taalzee – Oefenen','online',79],['Sara Vos','Wikipedia – Romeinen','online',47],['Lucas Mulder','Presenter','online',88],['Emma Bos','Google Docs – Verslag','idle',31],['Bram Dekker','Prowise Learn','online',69],['Julia Kuiper','Classroom – Opdracht','offline',0]
-  ].map((x,i)=>({id:i+1,name:x[0],tab:x[1],status:x[2],battery:x[3],paused:false,locked:false})),
-};
+const page=$('#page');
+const routeTitles={'my-apps':'Mijn applicaties','group-apps':'Groepsapplicaties',tasks:'Taken',classroom:'Klassenmanagement',library:'Bibliotheek',notifications:'Meldingen',settings:'Instellingen',help:'Help & informatie'};
 
-const titles = {
-  apps:['Mijn applicaties','Persoonlijk dashboard'],
-  'group-apps':['Groepsapplicaties',`Leeromgeving ${labelGroup(state.group)}`],
-  tasks:['Taken','Opdrachten beheren'],
-  classroom:['Klassenmanagement',`Live overzicht ${labelGroup(state.group)}`],
-  settings:['Instellingen','Persoonlijke voorkeuren'],
-  help:['Help','GO docentomgeving']
-};
-
-function labelGroup(g){ return g==='plus' ? 'Plusgroep' : `Groep ${g}`; }
-function persist(){
-  localStorage.setItem('go-apps',JSON.stringify(state.apps));
-  localStorage.setItem('go-group-apps',JSON.stringify(state.groupApps));
-  localStorage.setItem('go-tasks',JSON.stringify(state.tasks));
-  localStorage.setItem('go-group',state.group);
-  localStorage.setItem('go-location',state.location);
+function syncShell(state){
+ const group=store.group(),location=store.location();
+ $('#groupLabel').textContent=group.name;$('#groupMeta').textContent=`${group.count} leerlingen`;$('.group-avatar').textContent=group.short;
+ $('#locationLabel').textContent=location.name;
+ $('#taskCount').textContent=state.tasks.filter(t=>t.status==='open').length;
+ $('#notificationCount').textContent=state.notifications.filter(n=>!n.read).length;
+ $$('.nav-item[data-route]').forEach(b=>b.classList.toggle('active',b.dataset.route===state.route));
+ $('#breadcrumbs').innerHTML=`<span>GO</span><span>/</span><b>${esc(routeTitles[state.route]||'Mijn applicaties')}</b>`;
+ document.title=`${routeTitles[state.route]||'GO'} · GO Docentportaal`;
 }
-function esc(s=''){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-function toast(msg,type=''){ const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg; $('#toastRegion').appendChild(el); setTimeout(()=>el.remove(),2800); }
-function openModal(title, eyebrow, html){ $('#modalTitle').textContent=title; $('#modalEyebrow').textContent=eyebrow; $('#modalBody').innerHTML=html; $('#modalBackdrop').classList.remove('hidden'); $('#modalBackdrop').setAttribute('aria-hidden','false'); }
-function closeModal(){ $('#modalBackdrop').classList.add('hidden'); $('#modalBackdrop').setAttribute('aria-hidden','true'); }
+function render(){const state=store.get();syncShell(state);page.innerHTML=renderPage(state);hydrateIcons(page);bindDrag();}
+store.subscribe(render);render();hydrateIcons(document);
 
-function render(){
-  const [title,context]=titles[state.view];
-  $('#pageTitle').textContent=title;
-  $('#contextLabel').textContent=context.includes('undefined')? 'Docentomgeving':context;
-  $$('.nav-item[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===state.view));
-  const root=$('#viewRoot');
-  if(state.view==='apps') renderApps(root,false);
-  if(state.view==='group-apps') renderApps(root,true);
-  if(state.view==='tasks') renderTasks(root);
-  if(state.view==='classroom') renderClassroom(root);
-  if(state.view==='settings') renderSettings(root);
-  if(state.view==='help') renderHelp(root);
-  updateTaskBadge();
-}
+function go(route){store.route(route);$('#main').focus();document.querySelector('.app-shell').classList.remove('mobile-nav-open')}
 
-function tileHTML(app, groupMode=false){
-  return `<article class="app-tile" data-app-id="${app.id}">
-    <div class="tile-actions"><button class="mini-menu" data-app-menu="${app.id}" type="button">•••</button></div>
-    <button class="tile-open plain-reset" data-open-app="${app.id}" type="button" style="all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;width:100%">
-      <div class="app-icon" style="background:${app.color}">${esc(app.letters)}</div>
-      <strong>${esc(app.name)}</strong><span>${esc(app.tag)}</span>
-    </button>
-  </article>`;
-}
+document.addEventListener('click',async e=>{
+ const route=e.target.closest('[data-route]');if(route){go(route.dataset.route);return}
+ if(e.target.closest('[data-close-modal]')){closeModal();return}
+ if(e.target.closest('[data-close-drawer]')){closeDrawer();return}
+ const action=e.target.closest('[data-action]');if(!action)return;
+ const id=action.dataset.id;
+ switch(action.dataset.action){
+  case'home':go('my-apps');break;
+  case'new-app':showAppForm();break;
+  case'favorite-app':{const app=store.get().apps.find(a=>a.id===id);if(app)store.patchApp(id,{favorite:!app.favorite});break}
+  case'open-app':openApp(id);break;
+  case'app-menu':await showAppMenu(action,id);break;
+  case'add-library-app':addLibraryApp(action.dataset.libraryId);break;
+  case'new-task':showTaskForm();break;
+  case'open-task':showTaskDetails(id);break;
+  case'task-menu':await showTaskMenu(action,id);break;
+  case'task-library':showTaskLibrary();break;
+  case'toggle-student':store.patchStudent(id,{selected:action.checked});break;
+  case'select-all':store.selectAll(true);break;
+  case'clear-selection':store.clearSelection();break;
+  case'toggle-pause':togglePause(id);break;
+  case'pause-selected':toggleSelectedPause();break;
+  case'lock-selected':toggleSelectedLock();break;
+  case'send-link':showSendLink();break;
+  case'broadcast':showBroadcast();break;
+  case'student-details':showStudentDetails(id);break;
+  case'refresh-class':toast('Klassenmanagement vernieuwd','De demo-statussen zijn opnieuw geladen.','success');render();break;
+  case'mark-read':store.update(s=>({...s,notifications:s.notifications.map(n=>({...n,read:true}))}));toast('Meldingen bijgewerkt','Alles is gemarkeerd als gelezen.','success');break;
+  case'reset-demo':if(confirm('Alle lokale demo-aanpassingen wissen?')){store.reset();toast('Demo gereset','','success')}break;
+ }
+});
 
-function renderApps(root,groupMode){
-  const query=$('#globalSearch').value.trim().toLowerCase();
-  const source=groupMode? state.apps.filter(a=>state.groupApps.includes(a.id)) : state.apps;
-  const filtered=source.filter(a=>(a.name+' '+a.tag).toLowerCase().includes(query));
-  root.innerHTML=`
-    <div class="section-head">
-      <div><h2>${groupMode?labelGroup(state.group):'Mijn startpagina'}</h2><p>${groupMode?'Bepaal welke applicaties jouw leerlingen zien.':'Open je favoriete applicaties of pas je dashboard aan.'}</p></div>
-      <div class="toolbar">
-        <button class="btn" id="openLibrary" type="button">Bibliotheek</button>
-        <button class="btn primary" id="addApp" type="button">＋ Applicatie toevoegen</button>
-      </div>
-    </div>
-    <div class="apps-grid">
-      ${filtered.map(a=>tileHTML(a,groupMode)).join('')}
-      <button class="app-tile add-tile" id="addTile" type="button"><div class="plus-circle">＋</div><strong>Applicatie toevoegen</strong><span>Uit de bibliotheek</span></button>
-    </div>`;
-  $('#addApp').addEventListener('click',()=>openAppEditor(groupMode));
-  $('#addTile').addEventListener('click',()=>openAppEditor(groupMode));
-  $('#openLibrary').addEventListener('click',()=>openLibrary(groupMode));
-  $$('[data-open-app]',root).forEach(b=>b.addEventListener('click',()=>toast(`${state.apps.find(a=>a.id===b.dataset.openApp).name} geopend (demo).`,'success')));
-  $$('[data-app-menu]',root).forEach(b=>b.addEventListener('click',()=>openAppMenu(b.dataset.appMenu,groupMode)));
-}
+document.addEventListener('input',e=>{
+ if(e.target.id==='appsSearch')store.ui('appQuery',e.target.value);
+ if(e.target.id==='librarySearch')store.ui('libraryQuery',e.target.value);
+});
+document.addEventListener('change',e=>{
+ if(e.target.matches('[data-setting]')){const key=e.target.dataset.setting;store.setting(key,e.target.type==='checkbox'?e.target.checked:e.target.value)}
+});
+document.addEventListener('click',e=>{
+ const sort=e.target.closest('[data-app-sort]');if(sort)store.ui('appSort',sort.dataset.appSort);
+ const tab=e.target.closest('[data-task-tab]');if(tab)store.ui('taskTab',tab.dataset.taskTab);
+ const layout=e.target.closest('[data-class-layout]');if(layout)store.setting('classLayout',layout.dataset.classLayout);
+});
 
-function openAppEditor(groupMode=false){
-  openModal('Applicatie toevoegen','Applicatiebibliotheek',`
-    <form id="appForm" class="form-grid">
-      <div class="field full"><label>Naam</label><input name="name" required maxlength="40" placeholder="Bijvoorbeeld Nieuwsbegrip"></div>
-      <div class="field full"><label>URL</label><input name="url" type="url" placeholder="https://voorbeeld.nl"></div>
-      <div class="field"><label>Categorie</label><select name="tag"><option>Leren</option><option>Oefenen</option><option>Productiviteit</option><option>Video</option><option>Informatie</option></select></div>
-      <div class="field"><label>Kleur</label><input name="color" type="color" value="#216fae"></div>
-      <div class="field full"><label><input name="group" type="checkbox" ${groupMode?'checked':''}> Ook tonen bij groepsapplicaties</label></div>
-      <div class="modal-actions field full"><button class="btn" data-cancel type="button">Annuleren</button><button class="btn primary" type="submit">Toevoegen</button></div>
-    </form>`);
-  $('[data-cancel]').addEventListener('click',closeModal);
-  $('#appForm').addEventListener('submit',e=>{
-    e.preventDefault(); const fd=new FormData(e.currentTarget); const name=fd.get('name').trim();
-    const id='custom-'+Date.now(); state.apps.push({id,name,tag:fd.get('tag'),color:fd.get('color'),letters:name.slice(0,1).toUpperCase()});
-    if(fd.get('group')) state.groupApps.push(id); persist(); closeModal(); render(); toast('Applicatie toegevoegd.','success');
-  });
-}
+$('#collapseSidebar').addEventListener('click',()=>{$('#app').classList.toggle('sidebar-collapsed')});
+$('#mobileMenu').addEventListener('click',()=>{$('#app').classList.toggle('mobile-nav-open')});
+$('#quickCreate').addEventListener('click',()=>openQuickCreate());
+$('#notificationButton').addEventListener('click',()=>go('notifications'));
+$('#locationSwitcher').addEventListener('click',()=>showLocationPicker());
+$('#groupSwitcher').addEventListener('click',()=>showGroupPicker());
+$('#profileButton').addEventListener('click',()=>showProfile());$('#topProfile').addEventListener('click',()=>showProfile());
 
-function openLibrary(groupMode){
-  const rows=state.apps.map(a=>`<button class="choice" data-library-app="${a.id}" type="button"><strong>${esc(a.name)}</strong><div style="font-size:12px;color:#718096;margin-top:4px">${esc(a.tag)} ${groupMode?(state.groupApps.includes(a.id)?'• zichtbaar':'• niet zichtbaar'):''}</div></button>`).join('');
-  openModal('Applicatiebibliotheek','Bibliotheek',`<div class="choice-grid">${rows}</div>`);
-  $$('[data-library-app]').forEach(b=>b.addEventListener('click',()=>{
-    const id=b.dataset.libraryApp;
-    if(groupMode){ state.groupApps.includes(id)?state.groupApps=state.groupApps.filter(x=>x!==id):state.groupApps.push(id); persist(); closeModal(); render(); toast('Groepsapplicaties bijgewerkt.','success'); }
-    else toast(`${state.apps.find(a=>a.id===id).name} geselecteerd.`);
-  }));
-}
+function showLocationPicker(){openDrawer({title:'Locatie kiezen',eyebrow:'GO',html:`<div class="dropdown-list">${locations.map(l=>`<button class="dropdown-option ${store.get().locationId===l.id?'active':''}" data-location-id="${l.id}"><span class="empty-icon" style="width:38px;height:38px;margin:0">${icon('school')}</span><span class="copy"><b>${esc(l.name)}</b><small>${esc(l.sub)}</small></span></button>`).join('')}</div>`});$$('[data-location-id]',$('#drawerBody')).forEach(b=>b.addEventListener('click',()=>{store.setLocation(b.dataset.locationId);closeDrawer();toast('Locatie gewijzigd',b.textContent.trim(),'success')}))}
+function showGroupPicker(){openDrawer({title:'Groep kiezen',eyebrow:'Klassen',html:`<div class="dropdown-list">${groups.map(g=>`<button class="dropdown-option ${store.get().groupId===g.id?'active':''}" data-group-id="${g.id}"><span class="group-avatar">${g.short}</span><span class="copy"><b>${esc(g.name)}</b><small>${g.count} leerlingen</small></span></button>`).join('')}</div>`});$$('[data-group-id]',$('#drawerBody')).forEach(b=>b.addEventListener('click',()=>{store.setGroup(b.dataset.groupId);closeDrawer();toast('Groep geopend',store.group().name,'success')}))}
+function showProfile(){openDrawer({title:'Levi Docent',eyebrow:'Profiel',html:`<div style="display:grid;justify-items:center;text-align:center;gap:8px;padding:10px 0 22px"><span class="avatar" style="width:72px;height:72px;font-size:22px">LD</span><h3 style="margin:5px 0 0">Levi Docent</h3><span class="pill blue">Leerkracht</span></div><div class="card"><div class="card-body"><div class="field"><span class="field-label">Actieve locatie</span><b>${esc(store.location().name)}</b></div><div class="divider"></div><div class="field"><span class="field-label">Actieve groep</span><b>${esc(store.group().name)}</b></div></div></div>`})}
+function openQuickCreate(){openModal({title:'Nieuw maken',eyebrow:'Snelmenu',html:`<div class="library-grid"><button class="card" data-quick="app" style="padding:18px;text-align:left;border:1px solid var(--line)"><div class="empty-icon">${icon('plus')}</div><b>Applicatie</b><p class="muted">Voeg een webapptegel toe.</p></button><button class="card" data-quick="task" style="padding:18px;text-align:left;border:1px solid var(--line)"><div class="empty-icon">${icon('check-square')}</div><b>Taak</b><p class="muted">Maak een nieuwe opdracht.</p></button><button class="card" data-quick="link" style="padding:18px;text-align:left;border:1px solid var(--line)"><div class="empty-icon">${icon('link')}</div><b>Weblink</b><p class="muted">Stuur een link naar leerlingen.</p></button></div>`});$$('[data-quick]',$('#modalBody')).forEach(b=>b.addEventListener('click',()=>{const type=b.dataset.quick;closeModal();if(type==='app')showAppForm();if(type==='task')showTaskForm();if(type==='link')showSendLink()}))}
 
-function openAppMenu(id,groupMode){
-  const app=state.apps.find(a=>a.id===id); if(!app)return;
-  openModal(app.name,'Applicatie',`
-    <div class="choice-grid">
-      <button class="choice" id="openDemoApp" type="button"><strong>Openen</strong><div>Start deze applicatie</div></button>
-      ${groupMode?`<button class="choice" id="toggleGroupApp" type="button"><strong>Verwijderen uit groep</strong><div>Niet langer zichtbaar voor leerlingen</div></button>`:''}
-      <button class="choice" id="renameApp" type="button"><strong>Naam aanpassen</strong><div>Wijzig de tegelnaam</div></button>
-      <button class="choice" id="deleteApp" type="button"><strong>Verwijderen</strong><div>Verwijder deze tegel</div></button>
-    </div>`);
-  $('#openDemoApp').addEventListener('click',()=>{closeModal();toast(`${app.name} geopend (demo).`,'success')});
-  if($('#toggleGroupApp')) $('#toggleGroupApp').addEventListener('click',()=>{state.groupApps=state.groupApps.filter(x=>x!==id);persist();closeModal();render();toast('Uit groepsapplicaties verwijderd.')});
-  $('#renameApp').addEventListener('click',()=>{ const n=prompt('Nieuwe naam',app.name); if(n&&n.trim()){app.name=n.trim();persist();closeModal();render();} });
-  $('#deleteApp').addEventListener('click',()=>{state.apps=state.apps.filter(a=>a.id!==id);state.groupApps=state.groupApps.filter(x=>x!==id);persist();closeModal();render();toast('Applicatie verwijderd.','warn')});
-}
+function showAppForm(existing=null){const app=existing||{name:'',subtitle:'',url:'',initials:'',color:'logo-blue',group:false,favorite:false};openModal({title:existing?'Applicatie bewerken':'Applicatie toevoegen',eyebrow:'Applicaties',html:`<form id="appForm"><div class="form-grid"><div class="field full"><label>Naam</label><input class="input" name="name" required maxlength="40" value="${esc(app.name)}" placeholder="Bijv. Rekentuin"></div><div class="field full"><label>URL</label><input class="input" name="url" value="${esc(app.url||'')}" placeholder="https://..."></div><div class="field"><label>Ondertitel</label><input class="input" name="subtitle" maxlength="50" value="${esc(app.subtitle||'')}"></div><div class="field"><label>Letters / icoon</label><input class="input" name="initials" maxlength="3" value="${esc(app.initials||'')}"></div><div class="field"><label>Kleur</label><select class="select" name="color">${['logo-blue','logo-green','logo-purple','logo-orange','logo-red','logo-cyan','logo-dark','logo-yellow'].map(c=>`<option ${app.color===c?'selected':''}>${c}</option>`).join('')}</select></div><div class="field"><label>Dashboard</label><select class="select" name="scope"><option value="mine" ${!app.group?'selected':''}>Mijn applicaties</option><option value="group" ${app.group?'selected':''}>Groepsapplicaties</option></select></div></div><div class="modal-actions"><button class="btn" type="button" data-close-modal>Annuleren</button><button class="btn primary" type="submit">Opslaan</button></div></form>`});$('#appForm').addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(e.currentTarget),name=fd.get('name').trim();const patch={name,url:fd.get('url').trim()||'#',subtitle:fd.get('subtitle').trim()||'Webapplicatie',initials:fd.get('initials').trim()||initials(name).slice(0,2),color:fd.get('color'),group:fd.get('scope')==='group'};if(existing)store.patchApp(existing.id,patch);else store.addApp({id:makeId('app'),favorite:false,...patch});closeModal();toast(existing?'Applicatie bijgewerkt':'Applicatie toegevoegd',name,'success')})}
+function openApp(id){const app=store.get().apps.find(a=>a.id===id);if(!app)return;if(app.url&&app.url!=='#'&&/^https?:\/\//i.test(app.url)){window.open(app.url,'_blank','noopener')}else toast(app.name,'Demo-tegel geopend. Koppel later de echte SSO/URL.','success')}
+async function showAppMenu(button,id){const app=store.get().apps.find(a=>a.id===id);if(!app)return;const r=button.getBoundingClientRect();const action=await contextMenu(r.right,r.bottom,[{action:'edit',label:'Bewerken',icon:'edit'},{action:'favorite',label:app.favorite?'Favoriet verwijderen':'Favoriet maken',icon:'star'},{action:'remove',label:'Verwijderen',icon:'trash',danger:true}]);if(action==='edit')showAppForm(app);if(action==='favorite')store.patchApp(id,{favorite:!app.favorite});if(action==='remove'&&confirm(`${app.name} verwijderen?`)){store.removeApp(id);toast('Applicatie verwijderd',app.name,'success')}}
+function addLibraryApp(id){const source=libraryApps.find(a=>a.id===id);if(!source)return;if(store.get().apps.some(a=>a.id===id)){toast('Staat al op je dashboard',source.name,'warning');return}store.addApp({...source,group:false,favorite:false,url:source.url||'#'});toast('Toegevoegd aan Mijn applicaties',source.name,'success')}
 
-function renderTasks(root){
-  const query=$('#globalSearch').value.trim().toLowerCase();
-  let tasks=state.tasks.filter(t=>t.status===state.taskFilter && t.title.toLowerCase().includes(query));
-  root.innerHTML=`
-    <div class="section-head"><div><h2>Taken</h2><p>Plan opdrachten en houd de voortgang van leerlingen bij.</p></div><button class="btn primary" id="newTask" type="button">＋ Nieuwe taak</button></div>
-    <div class="task-tabs">
-      <button class="task-tab ${state.taskFilter==='open'?'active':''}" data-task-filter="open">Openstaand</button>
-      <button class="task-tab ${state.taskFilter==='future'?'active':''}" data-task-filter="future">Toekomstig</button>
-      <button class="task-tab ${state.taskFilter==='done'?'active':''}" data-task-filter="done">Afgerond</button>
-    </div>
-    <div class="task-list">${tasks.length?tasks.map(taskCard).join(''):`<div class="empty-state">Geen taken in deze categorie.</div>`}</div>`;
-  $('#newTask').addEventListener('click',openTaskEditor);
-  $$('[data-task-filter]',root).forEach(b=>b.addEventListener('click',()=>{state.taskFilter=b.dataset.taskFilter;render()}));
-  $$('[data-task-open]',root).forEach(b=>b.addEventListener('click',()=>openTaskDetails(Number(b.dataset.taskOpen))));
-}
-function taskCard(t){ const pct=t.total?Math.round(t.done/t.total*100):0; return `<article class="task-card"><div><h3>${esc(t.title)}</h3><div class="task-meta"><span class="pill blue">${esc(t.group)}</span><span>Deadline ${formatDate(t.due)}</span><span>${esc(t.description)}</span></div></div><div><div class="progress-wrap"><div class="progress"><span style="width:${pct}%"></span></div><span class="progress-label">${t.done}/${t.total}</span></div><div style="text-align:right;margin-top:8px"><button class="btn small" data-task-open="${t.id}" type="button">Bekijken</button></div></div></article>`; }
-function formatDate(v){ if(!v)return'—'; const [y,m,d]=v.split('-'); return `${d}-${m}-${y}`; }
-function openTaskEditor(){
-  openModal('Nieuwe taak','Takenmodule',`<form id="taskForm" class="form-grid">
-    <div class="field full"><label>Titel</label><input name="title" required maxlength="70"></div>
-    <div class="field full"><label>Beschrijving</label><textarea name="description"></textarea></div>
-    <div class="field"><label>Groep</label><select name="group"><option>Groep 8A</option><option>Groep 7B</option><option>Plusgroep</option></select></div>
-    <div class="field"><label>Deadline</label><input name="due" type="date" required></div>
-    <div class="field full"><label>Privénotitie docent</label><textarea name="private" placeholder="Alleen zichtbaar voor docenten"></textarea></div>
-    <div class="modal-actions field full"><button class="btn" data-cancel type="button">Annuleren</button><button class="btn primary" type="submit">Taak aanmaken</button></div></form>`);
-  $('[data-cancel]').addEventListener('click',closeModal);
-  $('#taskForm').addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(e.currentTarget);state.tasks.push({id:Date.now(),title:fd.get('title'),description:fd.get('description'),group:fd.get('group'),due:fd.get('due'),status:'open',done:0,total:24});persist();closeModal();state.taskFilter='open';render();toast('Taak aangemaakt.','success')});
-}
-function openTaskDetails(id){ const t=state.tasks.find(x=>x.id===id); if(!t)return; openModal(t.title,'Taakdetails',`<p>${esc(t.description)}</p><div class="settings-grid"><div class="setting-card"><h3>Voortgang</h3><p>${t.done} van ${t.total} leerlingen gereed.</p></div><div class="setting-card"><h3>Deadline</h3><p>${formatDate(t.due)}</p></div></div><div class="modal-actions"><button class="btn" id="markDoneTask">Markeer afgerond</button><button class="btn danger" id="deleteTask">Verwijderen</button></div>`); $('#markDoneTask').addEventListener('click',()=>{t.status='done';t.done=t.total;persist();closeModal();render();toast('Taak afgerond.','success')}); $('#deleteTask').addEventListener('click',()=>{state.tasks=state.tasks.filter(x=>x.id!==id);persist();closeModal();render();toast('Taak verwijderd.','warn')}); }
+function showTaskForm(existing=null){const group=store.group();const t=existing||{title:'',summary:'',description:'',start:new Date().toISOString().slice(0,10),deadline:'',archive:'',feedback:false,notes:''};openModal({title:existing?'Taak bewerken':'Nieuwe taak',eyebrow:'Taken',html:`<form id="taskForm"><div class="wizard-steps"><i class="wizard-step active"></i><i class="wizard-step active"></i><i class="wizard-step"></i></div><div class="form-grid"><div class="field full"><label>Titel</label><input class="input" name="title" required maxlength="70" value="${esc(t.title)}" placeholder="Titel van de opdracht"></div><div class="field full"><label>Samenvatting</label><input class="input" name="summary" maxlength="120" value="${esc(t.summary)}"></div><div class="field full"><label>Beschrijving</label><textarea class="textarea" name="description">${esc(t.description)}</textarea></div><div class="field"><label>Startdatum</label><input class="input" type="date" name="start" value="${esc(t.start)}"></div><div class="field"><label>Deadline</label><input class="input" type="date" name="deadline" required value="${esc(t.deadline)}"></div><div class="field"><label>Archiefdatum</label><input class="input" type="date" name="archive" value="${esc(t.archive)}"></div><div class="field"><label>Voor wie?</label><select class="select" name="group"><option value="${group.id}">${esc(group.name)} (${group.count})</option></select></div><div class="field full"><label>Privénotities voor beheerders</label><textarea class="textarea" name="notes">${esc(t.notes||'')}</textarea></div><label class="checkbox-line full"><input type="checkbox" name="feedback" ${t.feedback?'checked':''}><span><b>Feedback vragen</b><br><small class="muted">Leerlingen kunnen aangeven hoe zij de taak hebben ervaren.</small></span></label></div><div class="modal-actions"><button class="btn" type="button" data-close-modal>Annuleren</button><button class="btn primary" type="submit">Taak opslaan</button></div></form>`});$('#taskForm').addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(e.currentTarget),deadline=fd.get('deadline'),start=fd.get('start');const status=start>new Date().toISOString().slice(0,10)?'future':'open';const patch={title:fd.get('title').trim(),summary:fd.get('summary').trim(),description:fd.get('description').trim(),start,deadline,archive:fd.get('archive'),feedback:fd.get('feedback')==='on',notes:fd.get('notes').trim(),group:group.id,total:group.count,managers:['Levi Docent']};if(existing)store.patchTask(existing.id,patch);else store.addTask({id:makeId('task'),submitted:0,status,...patch});closeModal();toast(existing?'Taak bijgewerkt':'Taak aangemaakt',patch.title,'success')})}
+function showTaskDetails(id){const t=store.get().tasks.find(x=>x.id===id);if(!t)return;openDrawer({title:t.title,eyebrow:'Taakdetails',html:`<div class="task-detail-head"><div><span class="pill ${t.status==='done'?'green':t.status==='future'?'orange':'blue'}">${t.status}</span><h3>${esc(t.title)}</h3><p class="muted">${esc(t.summary)}</p></div><button class="btn sm" id="editTask">${icon('edit')}Bewerken</button></div><div class="task-detail-block"><h4>Beschrijving</h4><p>${esc(t.description||'Geen beschrijving')}</p></div><div class="task-detail-block"><h4>Planning</h4><p>Start: <b>${formatDate(t.start)}</b><br>Deadline: <b>${formatDate(t.deadline)}</b><br>Archief: <b>${formatDate(t.archive)}</b></p></div><div class="task-detail-block"><h4>Voortgang</h4><div class="task-progress-line" style="width:100%"><div class="progress"><span style="width:${t.total?Math.round(t.submitted/t.total*100):0}%"></span></div><b>${t.submitted}/${t.total}</b></div></div>${t.notes?`<div class="task-detail-block"><h4>Privénotities</h4><p>${esc(t.notes)}</p></div>`:''}`});$('#editTask')?.addEventListener('click',()=>{closeDrawer();showTaskForm(t)})}
+async function showTaskMenu(button,id){const task=store.get().tasks.find(t=>t.id===id);if(!task)return;const r=button.getBoundingClientRect();const a=await contextMenu(r.right,r.bottom,[{action:'view',label:'Openen',icon:'external'},{action:'edit',label:'Bewerken',icon:'edit'},{action:'complete',label:'Markeer afgerond',icon:'check'},{action:'delete',label:'Verwijderen',icon:'trash',danger:true}]);if(a==='view')showTaskDetails(id);if(a==='edit')showTaskForm(task);if(a==='complete')store.patchTask(id,{status:'done',submitted:task.total});if(a==='delete'&&confirm('Taak verwijderen?'))store.removeTask(id)}
+function showTaskLibrary(){openDrawer({title:'Takenbibliotheek',eyebrow:'Herbruikbare opdrachten',html:`<div class="dropdown-list">${['Weektaak rekenen','Leesopdracht','Woordenschat oefenen','Presentatie voorbereiden'].map((x,i)=>`<button class="dropdown-option" data-template="${i}"><span class="empty-icon" style="width:38px;height:38px;margin:0">${icon('check-square')}</span><span class="copy"><b>${x}</b><small>Voorbeeldsjabloon</small></span></button>`).join('')}</div>`});$$('[data-template]',$('#drawerBody')).forEach(b=>b.addEventListener('click',()=>{closeDrawer();showTaskForm({title:b.textContent.trim(),summary:'Herbruikbare opdracht uit de bibliotheek.',description:'Pas deze beschrijving aan voor jouw les.',start:new Date().toISOString().slice(0,10),deadline:'',archive:'',feedback:true,notes:''})}))}
 
-function renderClassroom(root){
-  const online=state.students.filter(s=>s.status!=='offline').length;
-  const selected=state.selectedStudents.size;
-  root.innerHTML=`
-    <div class="section-head"><div><h2>${labelGroup(state.group)}</h2><p>Visuele simulatie van live klassenmanagement.</p></div><div class="toolbar"><button class="btn" id="selectAllStudents" type="button">${selected===online?'Selectie wissen':'Alle online leerlingen'}</button><button class="btn primary" id="sendLink" type="button">Link sturen</button></div></div>
-    <div class="class-toolbar">
-      <div class="class-stats"><span class="pill green">● ${online} online</span><span class="pill orange">${state.students.filter(s=>s.status==='idle').length} inactief</span><span class="pill">${selected} geselecteerd</span></div>
-      <div class="toolbar"><button class="btn small" id="pauseSelected" type="button">⏸ Pauzeren</button><button class="btn small" id="focusSelected" type="button">◉ Focusmodus</button><button class="btn small" id="shareScreen" type="button">▣ Scherm delen</button></div>
-    </div>
-    <div class="student-grid">${state.students.map(studentCard).join('')}</div>`;
-  $$('[data-student-check]',root).forEach(c=>c.addEventListener('change',()=>{const id=Number(c.dataset.studentCheck);c.checked?state.selectedStudents.add(id):state.selectedStudents.delete(id);renderClassroom(root)}));
-  $$('[data-student-open]',root).forEach(b=>b.addEventListener('click',()=>openStudent(Number(b.dataset.studentOpen))));
-  $('#selectAllStudents').addEventListener('click',()=>{ if(state.selectedStudents.size===online) state.selectedStudents.clear(); else state.students.filter(s=>s.status!=='offline').forEach(s=>state.selectedStudents.add(s.id)); renderClassroom(root); });
-  $('#pauseSelected').addEventListener('click',()=>bulkStudentAction('pause'));
-  $('#focusSelected').addEventListener('click',()=>bulkStudentAction('focus'));
-  $('#shareScreen').addEventListener('click',()=>bulkStudentAction('share'));
-  $('#sendLink').addEventListener('click',openSendLink);
-}
-function studentCard(s){ const selected=state.selectedStudents.has(s.id); return `<article class="student-card ${selected?'selected':''}"><div class="student-preview"><input class="student-check" data-student-check="${s.id}" type="checkbox" ${selected?'checked':''} ${s.status==='offline'?'disabled':''}><span class="student-status pill ${s.status==='online'?'green':s.status==='idle'?'orange':''}">${s.status}</span><div class="browser-mock"><div class="browser-bar"><i></i><i></i><i></i></div><div class="browser-content"><strong>${esc(s.tab.split(' – ')[0])}</strong><br>Live schermvoorbeeld</div></div>${s.paused?'<div class="screen-paused">Device gepauzeerd</div>':''}</div><div class="student-info"><div class="student-title"><strong>${esc(s.name)}</strong><span>${s.status==='offline'?'—':s.battery+'%'}</span></div><div class="student-sub">Chromebook ${s.id.toString().padStart(2,'0')}</div><div class="tab-line">${s.locked?'🔒 ':''}${esc(s.tab)}</div></div><div class="student-actions"><button data-student-open="${s.id}" type="button">Beheren</button></div></article>`; }
-function ensureSelection(){ if(!state.selectedStudents.size){toast('Selecteer eerst één of meer leerlingen.','warn');return false} return true; }
-function bulkStudentAction(action){ if(!ensureSelection())return; const list=state.students.filter(s=>state.selectedStudents.has(s.id)); if(action==='pause'){const shouldPause=!list.every(s=>s.paused);list.forEach(s=>s.paused=shouldPause);render();toast(shouldPause?'Geselecteerde devices gepauzeerd.':'Devices hervat.','success')} if(action==='focus') toast('Focusmodus gestart voor geselecteerde leerlingen (simulatie).','success'); if(action==='share') toast('Schermdelen gestart (simulatie).','success'); }
-function openSendLink(){ openModal('Weblink sturen','Klassenmanagement',`<form id="sendLinkForm" class="form-grid"><div class="field full"><label>Webadres</label><input name="url" type="url" value="https://" required></div><div class="field full"><label><input name="lock" type="checkbox"> Tabblad direct vastzetten</label></div><div class="field full"><label><input name="focus" type="checkbox"> Openen in focusmodus</label></div><div class="modal-actions field full"><button class="btn" data-cancel type="button">Annuleren</button><button class="btn primary" type="submit">Versturen</button></div></form>`); $('[data-cancel]').addEventListener('click',closeModal); $('#sendLinkForm').addEventListener('submit',e=>{e.preventDefault();if(!state.selectedStudents.size){toast('Selecteer eerst leerlingen.','warn');return} const fd=new FormData(e.currentTarget); state.students.filter(s=>state.selectedStudents.has(s.id)).forEach(s=>{s.tab=fd.get('url');s.locked=!!fd.get('lock')}); closeModal();render();toast('Weblink naar leerlingen gestuurd (simulatie).','success')}); }
-function openStudent(id){ const s=state.students.find(x=>x.id===id); if(!s)return; openModal(s.name,'Leerlingdevice',`<div class="settings-grid"><div class="setting-card"><h3>Huidig tabblad</h3><p>${esc(s.tab)}</p></div><div class="setting-card"><h3>Status</h3><p>${esc(s.status)} • batterij ${s.battery}%</p></div></div><div class="choice-grid" style="margin-top:14px"><button class="choice" id="studentPause" type="button"><strong>${s.paused?'Hervatten':'Pauzeren'}</strong><div>Device tijdelijk blokkeren</div></button><button class="choice" id="studentLock" type="button"><strong>${s.locked?'Ontgrendelen':'Tabblad vastzetten'}</strong><div>Leerling op huidige pagina houden</div></button><button class="choice" id="studentLive" type="button"><strong>Live bekijken</strong><div>Open live schermweergave (simulatie)</div></button><button class="choice" id="studentCloseTab" type="button"><strong>Tabblad sluiten</strong><div>Sluit actief tabblad</div></button></div>`); $('#studentPause').addEventListener('click',()=>{s.paused=!s.paused;closeModal();render();toast(s.paused?'Device gepauzeerd.':'Device hervat.','success')}); $('#studentLock').addEventListener('click',()=>{s.locked=!s.locked;closeModal();render();toast(s.locked?'Tabblad vastgezet.':'Tabblad ontgrendeld.','success')}); $('#studentLive').addEventListener('click',()=>toast('Live meekijken geopend (simulatie).','success')); $('#studentCloseTab').addEventListener('click',()=>{s.tab='Nieuw tabblad';s.locked=false;closeModal();render();toast('Tabblad gesloten.','success')}); }
+function togglePause(id){const s=store.get().students.find(x=>x.id===id);if(!s||s.status==='offline')return;store.patchStudent(id,{paused:!s.paused});toast(s.paused?'Device hervat':'Device gepauzeerd',`${s.name} · visuele simulatie`,'success')}
+function toggleSelectedPause(){const list=store.get().students.filter(s=>s.selected&&s.status!=='offline');if(!list.length)return toast('Selecteer eerst leerlingen','','warning');const allPaused=list.every(s=>s.paused);store.patchSelected({paused:!allPaused});toast(allPaused?'Devices hervat':'Devices gepauzeerd',`${list.length} leerlingen · simulatie`,'success')}
+function toggleSelectedLock(){const list=store.get().students.filter(s=>s.selected&&s.status!=='offline');if(!list.length)return toast('Selecteer eerst leerlingen','','warning');const allLocked=list.every(s=>s.locked);store.patchSelected({locked:!allLocked});toast(allLocked?'Tabbladen ontgrendeld':'Tabbladen vastgezet',`${list.length} leerlingen · simulatie`,'success')}
+function showSendLink(){const selected=store.get().students.filter(s=>s.selected&&s.status!=='offline');openModal({title:'Weblink sturen',eyebrow:'Klassenmanagement',html:`<form id="linkForm"><div class="field"><label>Webadres</label><input class="input" name="url" type="url" required placeholder="https://..."></div><div class="field" style="margin-top:12px"><label>Ontvangers</label><select class="select" name="scope"><option value="selected" ${selected.length?'':'disabled'}>Geselecteerde leerlingen (${selected.length})</option><option value="online">Alle online leerlingen</option></select></div><label class="checkbox-line" style="margin-top:14px"><input type="checkbox" name="lock"><span><b>Direct vastzetten</b><br><small class="muted">Toon de link als gelockt tabblad in de simulatie.</small></span></label><div class="modal-actions"><button class="btn" type="button" data-close-modal>Annuleren</button><button class="btn primary" type="submit">Sturen</button></div></form>`});$('#linkForm').addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(e.currentTarget),url=fd.get('url'),lock=fd.get('lock')==='on',scope=fd.get('scope');store.update(s=>({...s,students:s.students.map(st=>{const target=scope==='online'?st.status!=='offline':st.selected;return target?{...st,tab:url.replace(/^https?:\/\//,'').slice(0,40),url,locked:lock}:st})}));closeModal();toast('Weblink verzonden',scope==='online'?'Naar alle online leerlingen':`Naar ${selected.length} geselecteerde leerlingen`,'success')})}
+function showBroadcast(){openModal({title:'Scherm delen',eyebrow:'Klassenmanagement',html:`<div class="broadcast-card"><h4>Live scherm delen — demo</h4><p>In deze GitHub Pages-versie wordt alleen de workflow gesimuleerd. Een echte implementatie heeft een device-agent/extensie en backendverbinding nodig.</p></div><div class="field" style="margin-top:16px"><label>Ontvangers</label><select class="select" id="broadcastScope"><option>Alle online leerlingen</option><option>Alleen geselecteerde leerlingen</option></select></div><div class="modal-actions"><button class="btn" type="button" data-close-modal>Annuleren</button><button class="btn primary" id="startBroadcast">${icon('cast')}Delen starten</button></div>`});$('#startBroadcast').addEventListener('click',()=>{closeModal();toast('Schermdelen gestart','Visuele simulatie actief.','success')})}
+function showStudentDetails(id){const s=store.get().students.find(x=>x.id===id);if(!s)return;openDrawer({title:s.name,eyebrow:'Leerlingdevice',html:`<div class="live-preview"><div class="mock-browser"><div class="mock-browser-top"><i></i><i></i><i></i><span class="mock-url"></span></div><div class="mock-page"><span class="mock-sidebar"></span><span class="mock-content"><i></i><i></i><i></i><i></i></span></div></div></div><div class="task-detail-block"><h4>Huidige activiteit</h4><p><b>${esc(s.tab)}</b><br>${esc(s.url)}</p></div><div class="task-detail-block"><h4>Status</h4><p>${s.status} · batterij ${s.battery}% · ${s.lastSeen}</p></div><div class="toolbar"><button class="btn" id="detailPause">${s.paused?icon('play'):icon('pause')}${s.paused?'Doorgaan':'Pauzeren'}</button><button class="btn" id="detailLock">${s.locked?icon('unlock'):icon('lock')}${s.locked?'Ontgrendelen':'Vastzetten'}</button></div>`});$('#detailPause').addEventListener('click',()=>{togglePause(id);closeDrawer()});$('#detailLock').addEventListener('click',()=>{store.patchStudent(id,{locked:!s.locked});closeDrawer();toast('Tabbladstatus aangepast',`${s.name} · simulatie`,'success')})}
 
-function renderSettings(root){ root.innerHTML=`<div class="section-head"><div><h2>Instellingen</h2><p>Pas de docentomgeving aan.</p></div></div><div class="settings-grid"><div class="setting-card"><h3>Dashboard</h3><p>Stel voorkeuren voor jouw startomgeving in.</p><div class="switch-line"><span>Compacte tegels</span><label class="switch"><input id="compactTiles" type="checkbox"><span></span></label></div><div class="switch-line"><span>Animaties</span><label class="switch"><input type="checkbox" checked><span></span></label></div></div><div class="setting-card"><h3>Klassenmanagement</h3><p>Voorkeuren voor live klassenoverzicht.</p><div class="switch-line"><span>Offline leerlingen tonen</span><label class="switch"><input type="checkbox" checked><span></span></label></div><div class="switch-line"><span>Batterijpercentage tonen</span><label class="switch"><input type="checkbox" checked><span></span></label></div></div><div class="setting-card"><h3>Meldingen</h3><p>Bepaal welke meldingen jij tijdens de les ontvangt.</p><div class="switch-line"><span>Taak ingeleverd</span><label class="switch"><input type="checkbox" checked><span></span></label></div><div class="switch-line"><span>Leerling vraagt hulp</span><label class="switch"><input type="checkbox" checked><span></span></label></div></div></div>`; }
-function renderHelp(root){ root.innerHTML=`<div class="section-head"><div><h2>Help</h2><p>Snelle uitleg van deze docentdemo.</p></div></div><div class="settings-grid"><div class="setting-card"><h3>Mijn applicaties</h3><p>Beheer je persoonlijke starttegels, zoek apps en voeg eigen applicaties toe.</p></div><div class="setting-card"><h3>Groepsapplicaties</h3><p>Kies welke apps zichtbaar zijn voor de geselecteerde groep.</p></div><div class="setting-card"><h3>Taken</h3><p>Maak opdrachten aan, plan deadlines en bekijk de voortgang.</p></div><div class="setting-card"><h3>Klassenmanagement</h3><p>Selecteer leerlingen, pauzeer devices, stuur links en simuleer focusmodus of live meekijken.</p></div></div>`; }
+function bindDrag(){const tiles=$$('.app-tile[data-app-id]');let dragged=null;tiles.forEach(tile=>{tile.addEventListener('dragstart',()=>{dragged=tile.dataset.appId;tile.classList.add('dragging')});tile.addEventListener('dragend',()=>{tile.classList.remove('dragging');$$('.drop-target').forEach(x=>x.classList.remove('drop-target'));dragged=null});tile.addEventListener('dragover',e=>{e.preventDefault();if(dragged&&dragged!==tile.dataset.appId)tile.classList.add('drop-target')});tile.addEventListener('dragleave',()=>tile.classList.remove('drop-target'));tile.addEventListener('drop',e=>{e.preventDefault();const target=tile.dataset.appId;if(!dragged||dragged===target)return;store.update(s=>{const arr=[...s.apps],from=arr.findIndex(a=>a.id===dragged),to=arr.findIndex(a=>a.id===target);const [item]=arr.splice(from,1);arr.splice(to,0,item);return{...s,apps:arr}});toast('Volgorde aangepast','','success')})})}
 
-function updateTaskBadge(){ const n=state.tasks.filter(t=>t.status==='open').length; $('#taskBadge').textContent=n; }
-
-$$('.nav-item[data-view]').forEach(b=>b.addEventListener('click',()=>{state.view=b.dataset.view;$('#globalSearch').value='';render()}));
-$('#collapseSidebar').addEventListener('click',()=>{$('#sidebar').classList.toggle('collapsed');$('#collapseSidebar').textContent=$('#sidebar').classList.contains('collapsed')?'›':'‹'});
-$('#closeModal').addEventListener('click',closeModal);
-$('#modalBackdrop').addEventListener('click',e=>{if(e.target===$('#modalBackdrop'))closeModal()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
-$('#globalSearch').addEventListener('input',()=>{if(['apps','group-apps','tasks'].includes(state.view))render()});
-$('#groupSelect').value=state.group;
-$('#locationSelect').value=state.location;
-$('#groupSelect').addEventListener('change',e=>{state.group=e.target.value;persist();titles['group-apps'][1]=`Leeromgeving ${labelGroup(state.group)}`;titles.classroom[1]=`Live overzicht ${labelGroup(state.group)}`;render();toast(`Gewisseld naar ${labelGroup(state.group)}.`)});
-$('#locationSelect').addEventListener('change',e=>{state.location=e.target.value;persist();toast(`Locatie gewijzigd naar ${state.location}.`)});
-$('#profileBtn').addEventListener('click',()=>openModal('Levi Docent','Profiel',`<div class="settings-grid"><div class="setting-card"><h3>Leerkracht</h3><p>${esc(state.location)}<br>${labelGroup(state.group)}</p></div></div>`));
-$('#notificationsBtn').addEventListener('click',()=>openModal('Meldingen','Vandaag',`<div class="task-list"><div class="setting-card"><strong>3 taken wachten op controle</strong><p style="margin-bottom:0">Groep 8A heeft nieuwe voortgang.</p></div><div class="setting-card"><strong>Klassenmanagement beschikbaar</strong><p style="margin-bottom:0">11 devices zijn momenteel bereikbaar.</p></div></div>`));
-$('#quickAddBtn').addEventListener('click',()=>{ if(state.view==='tasks')openTaskEditor(); else openAppEditor(state.view==='group-apps'); });
-
-render();
+const globalSearch=$('#globalSearch');globalSearch.addEventListener('focus',()=>openCommands(globalSearch.value));globalSearch.addEventListener('input',()=>openCommands(globalSearch.value));
+function openCommands(q=''){const state=store.get(),query=q.toLowerCase();const commands=[...Object.entries(routeTitles).map(([route,label])=>({label,route,icon:'grid'})),...state.apps.map(a=>({label:a.name,app:a.id,icon:'external'})),...state.tasks.map(t=>({label:t.title,task:t.id,icon:'check-square'}))].filter(x=>x.label.toLowerCase().includes(query)).slice(0,12);$('#commandPalette').hidden=false;$('#commandInput').value=q;$('#commandResults').innerHTML=commands.map((c,i)=>`<button class="command-item ${i===0?'active':''}" data-command-index="${i}"><span>${icon(c.icon)}</span><b>${esc(c.label)}</b><small>${c.route?'Pagina':c.app?'App':'Taak'}</small></button>`).join('');hydrateIcons($('#commandPalette'));$$('[data-command-index]',$('#commandResults')).forEach((b,i)=>b.addEventListener('click',()=>runCommand(commands[i])))}
+function runCommand(c){$('#commandPalette').hidden=true;globalSearch.blur();if(c.route)go(c.route);if(c.app)openApp(c.app);if(c.task){go('tasks');setTimeout(()=>showTaskDetails(c.task),0)}}
+$('#commandInput').addEventListener('input',e=>openCommands(e.target.value));
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();closeDrawer();$('#commandPalette').hidden=true}if(e.key==='/'&&!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){e.preventDefault();globalSearch.focus()}});
+$('#commandPalette').addEventListener('click',e=>{if(e.target===$('#commandPalette'))$('#commandPalette').hidden=true});
