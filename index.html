@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1f6fae" />
+  <title>GO Teacher Portal</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand-row">
+        <div class="brand-mark">GO</div>
+        <div class="brand-copy">
+          <strong>Teacher Portal</strong>
+          <span>Docentomgeving</span>
+        </div>
+      </div>
+
+      <button class="profile-card" id="profileBtn" type="button">
+        <div class="avatar">LD</div>
+        <div class="profile-copy">
+          <strong>Levi Docent</strong>
+          <span>Leerkracht</span>
+        </div>
+        <span class="chevron">⌄</span>
+      </button>
+
+      <div class="sidebar-selects">
+        <label>
+          <span>Locatie</span>
+          <select id="locationSelect">
+            <option>Basisschool De Horizon</option>
+            <option>Locatie Centrum</option>
+            <option>Locatie Noord</option>
+          </select>
+        </label>
+        <label>
+          <span>Groep</span>
+          <select id="groupSelect">
+            <option value="8A">Groep 8A</option>
+            <option value="7B">Groep 7B</option>
+            <option value="plus">Plusgroep</option>
+          </select>
+        </label>
+      </div>
+
+      <nav class="nav-list" aria-label="Hoofdnavigatie">
+        <button class="nav-item active" data-view="apps" type="button"><span class="nav-icon">▦</span><span>Mijn applicaties</span></button>
+        <button class="nav-item" data-view="group-apps" type="button"><span class="nav-icon">▤</span><span>Groepsapplicaties</span></button>
+        <button class="nav-item" data-view="tasks" type="button"><span class="nav-icon">✓</span><span>Taken</span><span class="nav-badge" id="taskBadge">3</span></button>
+        <button class="nav-item" data-view="classroom" type="button"><span class="nav-icon">◉</span><span>Klassenmanagement</span><span class="status-dot green"></span></button>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+      <nav class="nav-list nav-bottom">
+        <button class="nav-item" data-view="settings" type="button"><span class="nav-icon">⚙</span><span>Instellingen</span></button>
+        <button class="nav-item" data-view="help" type="button"><span class="nav-icon">?</span><span>Help</span></button>
+      </nav>
+      <button class="collapse-btn" id="collapseSidebar" type="button" aria-label="Navigatie inklappen">‹</button>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow" id="contextLabel">Persoonlijk dashboard</p>
+          <h1 id="pageTitle">Mijn applicaties</h1>
+        </div>
+        <div class="top-actions">
+          <div class="search-wrap">
+            <span>⌕</span>
+            <input id="globalSearch" type="search" placeholder="Zoeken..." autocomplete="off" />
+          </div>
+          <button class="icon-btn" id="notificationsBtn" type="button" aria-label="Meldingen">🔔<span class="notif-dot"></span></button>
+          <button class="icon-btn" id="quickAddBtn" type="button" aria-label="Toevoegen">＋</button>
+        </div>
+      </header>
+
+      <section id="viewRoot" class="content"></section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop hidden" id="modalBackdrop" aria-hidden="true">
+    <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow" id="modalEyebrow">Instellingen</p>
+          <h2 id="modalTitle">Venster</h2>
+        </div>
+        <button class="icon-btn" id="closeModal" type="button" aria-label="Sluiten">×</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <div class="toast-region" id="toastRegion" aria-live="polite"></div>
+  <script src="script.js"></script>
+</body>
+</html>
