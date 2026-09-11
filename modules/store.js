@@ -1,9 +1,14 @@
 import {groups,locations,initialApps,initialTasks,initialStudents,notifications} from './data.js';
 const KEY='go_teacher_portal_v3';
 const clone=value=>JSON.parse(JSON.stringify(value));
+const defaultFlexGroups=[
+ {id:'fg1',name:'Verlengde instructie rekenen',color:'blue',members:['s1','s2','s3','s4','s5','s6']},
+ {id:'fg2',name:'Plusgroep taal',color:'purple',members:['s7','s8','s9','s10','s11','s12']},
+ {id:'fg3',name:'Leesmaatjes',color:'green',members:['s13','s14','s15','s16','s17','s18','s19','s20']}
+];
 const defaults={
  route:'day-start',portalMode:'teacher',activeStudentId:null,teacherName:'Levi Docent',groupId:'8A',locationId:'horizon',
- apps:clone(initialApps),tasks:clone(initialTasks),students:clone(initialStudents),folders:[],notifications:clone(notifications),flexGroups:[],
+ apps:clone(initialApps),tasks:clone(initialTasks),students:clone(initialStudents),folders:[],notifications:clone(notifications),flexGroups:clone(defaultFlexGroups),
  classMode:{active:false,traffic:'green',timerMinutes:15,timerRunning:false,scoreA:0,scoreB:0},
  settings:{compactTiles:false,showSubtitles:true,classLayout:'grid',animations:true},
  ui:{taskTab:'open',appSort:'custom',appQuery:'',taskQuery:'',libraryQuery:''}
@@ -11,6 +16,7 @@ const defaults={
 function normalize(saved){
  const merged={...clone(defaults),...saved,settings:{...defaults.settings,...saved?.settings},ui:{...defaults.ui,...saved?.ui},classMode:{...defaults.classMode,...saved?.classMode}};
  if(!Array.isArray(merged.students)||!merged.students.length)merged.students=clone(initialStudents);
+ if(!Array.isArray(merged.flexGroups)||!merged.flexGroups.length)merged.flexGroups=clone(defaultFlexGroups);
  if(merged.portalMode==='student'&&!merged.activeStudentId)merged.activeStudentId=merged.students[0]?.id||null;
  return merged;
 }
