@@ -155,3 +155,5 @@ document.addEventListener('click',e=>{
 document.addEventListener('click',e=>{const b=e.target.closest('[data-v4-att]');if(!b)return;const e2=extra();e2.attendance[b.dataset.id]=b.dataset.v4Att;saveExtra(e2);b.parentElement.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b))});
 
 window.addEventListener('beforeunload',()=>{for(const [id] of peers)stopLive(id,true);channel?.close()});
+
+import './manual-live.js';
